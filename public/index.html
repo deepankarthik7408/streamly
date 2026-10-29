@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streamly – Movies & TV Shows</title>
+<style>
+:root{--bg:#141414;--panel:#1f1f1f;--text:#f2f2f2;--muted:#a3a3a3;--red:#e50914}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+.nav{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;gap:20px;padding:14px 4%;background:linear-gradient(#000c,#0000);transition:background .3s}
+.nav.solid{background:#141414f2}
+.logo{color:var(--red);font-weight:800;font-size:1.6rem;letter-spacing:1px;cursor:pointer}
+.nav a{color:var(--muted);cursor:pointer;font-size:.95rem}.nav a.on,.nav a:hover{color:#fff}
+.nav input{margin-left:auto;background:#000a;border:1px solid #555;color:#fff;padding:7px 12px;border-radius:4px;width:min(240px,40vw)}
+.hero{position:relative;min-height:70vh;display:flex;align-items:flex-end;padding:0 4% 8%}
+.hero .in{max-width:560px}
+.hero h1{font-size:clamp(2rem,5vw,3.6rem);margin-bottom:12px}
+.hero p{color:#ddd;line-height:1.5;margin-bottom:18px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.btn{padding:9px 22px;border-radius:4px;font-weight:600;margin-right:10px;display:inline-block;text-decoration:none}
+.btn.w{background:#fff;color:#000}.btn.g{background:#6d6d6eb3;color:#fff}
+.sec{padding:0 4%;margin:22px 0}.sec h2{font-size:1.2rem;margin-bottom:10px}
+.row{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x proximity}
+.row .card{flex:0 0 150px;scroll-snap-align:start}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{position:relative;aspect-ratio:2/3;border-radius:6px;background-size:cover;background-position:center;overflow:hidden;text-align:left;transition:transform .2s;display:flex;flex-direction:column;justify-content:flex-end;padding:10px}
+.card:hover{transform:scale(1.06);z-index:2}
+.card .ct{font-weight:700;font-size:.95rem;line-height:1.2;text-shadow:0 1px 4px #000}
+.card .cm{font-size:.75rem;color:#ddd;margin-top:3px}
+.card.has .ct,.card.has .cm{display:none}
+.bar{display:flex;flex-wrap:wrap;gap:10px;padding:90px 4% 0;align-items:center}
+.bar h2{margin-right:auto}
+select{background:var(--panel);color:#fff;border:1px solid #444;padding:7px 10px;border-radius:4px;max-width:180px}
+.more{display:block;margin:24px auto;background:var(--panel);padding:10px 28px;border-radius:4px}
+.empty{padding:40px 4%;color:var(--muted)}
+#modal{position:fixed;inset:0;background:#000b;z-index:50;display:none;align-items:center;justify-content:center;padding:16px}
+#modal.open{display:flex}
+.box{background:var(--panel);border-radius:10px;max-width:640px;width:100%;max-height:90vh;overflow:auto}
+.box .top{padding:60px 28px 20px;background:linear-gradient(transparent,var(--panel))}
+.box .body{padding:0 28px 28px}
+.box h2{font-size:1.8rem;margin-bottom:8px}
+.meta{color:var(--muted);font-size:.9rem;margin-bottom:12px}
+.chip{display:inline-block;border:1px solid #555;border-radius:20px;padding:3px 12px;margin:0 6px 6px 0;font-size:.8rem;color:#ddd;cursor:pointer}
+.box dl{margin-top:14px;font-size:.9rem;line-height:1.5}.box dt{color:var(--muted);margin-top:8px}
+.x{position:absolute;top:14px;right:18px;font-size:1.8rem;color:#fff}
+footer{padding:30px 4%;color:var(--muted);font-size:.75rem}
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <span class="logo" data-go="home">STREAMLY</span>
+  <a data-go="home" class="on">Home</a><a data-go="Movie">Movies</a><a data-go="TV Show">TV Shows</a>
+  <input id="q" type="search" placeholder="Title, actor, director…" autocomplete="off">
+</header>
+<main id="app"></main>
+<div id="modal"><div class="box" id="box"></div></div>
+<footer id="foot">Data: Netflix titles dataset. Streamly is a demo catalog app and does not stream video.</footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const api = (p) => fetch(p).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+let posters = false, filters = null;
+const state = { type: '', genre: '', country: '', sort: 'new', q: '', page: 1 };
+
+const dur = (t) => t.duration_value ? (t.duration_unit === 'min' ? `${t.duration_value} min` : `${t.duration_value} Season${t.duration_value > 1 ? 's' : ''}`) : '';
+const grad = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `linear-gradient(150deg,hsl(${h},55%,34%),hsl(${(h + 50) % 360},65%,12%))`; };
+const trailer = (t) => `https://www.youtube.com/results?search_query=${encodeURIComponent(t.title + ' ' + t.release_year + ' trailer')}`;
+const watch = (t) => t.video_url ? `<a class="btn w" target="_blank" rel="noopener" href="${esc(t.video_url)}">▶ Watch Now</a>` : '';
+const tbtn = (t) => `<a class="btn ${t.video_url ? 'g' : 'w'}" target="_blank" rel="noopener" href="${trailer(t)}">▶ Trailer</a>`;
+
+const io = new IntersectionObserver((entries) => entries.forEach(async (e) => {
+  if (!e.isIntersecting) return;
+  io.unobserve(e.target);
+  const { title, year, type } = e.target.dataset;
+  try {
+    const { url } = await api(`/api/poster?title=${encodeURIComponent(title)}&year=${year}&type=${encodeURIComponent(type)}`);
+    if (url) { e.target.style.backgroundImage = `url(${url})`; e.target.classList.add('has'); }
+  } catch {}
+}), { rootMargin: '200px' });
+
+function card(t) {
+  const el = document.createElement('button');
+  el.className = 'card';
+  el.style.backgroundImage = grad(t.title);
+  el.innerHTML = `<span class="ct">${esc(t.title)}</span><span class="cm">${t.release_year} · ${esc(t.rating || 'NR')}</span>`;
+  el.onclick = () => openModal(t.show_id);
+  Object.assign(el.dataset, { title: t.title, year: t.release_year, type: t.type });
+  if (posters) io.observe(el);
+  return el;
+}
+
+async function home() {
+  $('#app').innerHTML = '<div class="empty">Loading…</div>';
+  const [f, rows] = await Promise.all([api('/api/featured'), api('/api/rows')]);
+  const app = $('#app'); app.innerHTML = '';
+  const hero = document.createElement('section');
+  hero.className = 'hero'; hero.style.background = `linear-gradient(90deg,#141414 10%,#14141400 80%),linear-gradient(to top,#141414,#14141400 35%),${grad(f.title)}`;
+  hero.innerHTML = `<div class="in"><h1>${esc(f.title)}</h1><div class="meta">${f.release_year} · ${esc(f.rating || 'NR')} · ${esc(dur(f))}</div><p>${esc(f.description)}</p>
+    ${watch(f)}${tbtn(f)}<button class="btn g" id="hi">ⓘ More Info</button></div>`;
+  app.append(hero);
+  $('#hi').onclick = () => openModal(f.show_id);
+  rows.forEach((r) => {
+    const s = document.createElement('section'); s.className = 'sec';
+    const h = document.createElement('h2'); h.textContent = r.name;
+    if (r.genre) { h.style.cursor = 'pointer'; h.onclick = () => browse({ genre: r.genre }); }
+    const row = document.createElement('div'); row.className = 'row';
+    r.items.forEach((t) => row.append(card(t)));
+    s.append(h, row); app.append(s);
+  });
+}
+
+async function browse(patch = {}, reset = true) {
+  Object.assign(state, patch);
+  if (reset) state.page = 1;
+  if (!filters) filters = await api('/api/filters');
+  const opt = (arr, cur, all) => `<option value="">${all}</option>` + arr.map((x) => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
+  const params = new URLSearchParams({ ...state, limit: 24 });
+  const data = await api('/api/titles?' + params);
+  const app = $('#app');
+  if (state.page === 1) {
+    const title = state.q ? `Results for “${esc(state.q)}”` : (state.type === 'Movie' ? 'Movies' : state.type === 'TV Show' ? 'TV Shows' : 'Browse');
+    app.innerHTML = `<div class="bar"><h2>${title} <small style="color:var(--muted);font-weight:400">(${data.total.toLocaleString()})</small></h2>
+      <select id="fg">${opt(filters.genres, state.genre, 'All genres')}</select>
+      <select id="fc">${opt(filters.countries, state.country, 'All countries')}</select>
+      <select id="fs"><option value="new" ${state.sort === 'new' ? 'selected' : ''}>Recently added</option><option value="year" ${state.sort === 'year' ? 'selected' : ''}>Release year</option><option value="az" ${state.sort === 'az' ? 'selected' : ''}>A–Z</option></select></div>
+      <section class="sec"><div class="grid" id="grid"></div><div id="more"></div></section>`;
+    $('#fg').onchange = (e) => browse({ genre: e.target.value });
+    $('#fc').onchange = (e) => browse({ country: e.target.value });
+    $('#fs').onchange = (e) => browse({ sort: e.target.value });
+    if (!data.items.length) $('#grid').outerHTML = '<div class="empty">Nothing found.</div>';
+  }
+  const grid = $('#grid');
+  if (grid) data.items.forEach((t) => grid.append(card(t)));
+  const shown = state.page * 24;
+  $('#more').innerHTML = shown < data.total ? '<button class="more">Load more</button>' : '';
+  const m = $('#more button'); if (m) m.onclick = () => { state.page++; browse({}, false); };
+}
+
+async function openModal(id) {
+  const box = $('#box'); $('#modal').classList.add('open');
+  box.innerHTML = '<div class="body" style="padding:60px 28px">Loading…</div>';
+  const t = await api('/api/titles/' + id);
+  const chips = (t.genres || '').split(', ').filter(Boolean).map((g) => `<span class="chip" data-genre="${esc(g)}">${esc(g)}</span>`).join('');
+  const row = (k, v) => v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : '';
+  box.innerHTML = `<button class="x" id="cl">×</button>
+    <div class="top" style="background:linear-gradient(transparent,var(--panel)),${grad(t.title)}"><h2>${esc(t.title)}</h2>
+    ${watch(t)}${tbtn(t)}</div>
+    <div class="body"><div class="meta">${t.release_year} · ${esc(t.rating || 'NR')} · ${esc(dur(t))} · ${esc(t.type)}</div>${chips}
+    <p style="line-height:1.55;margin-top:8px">${esc(t.description)}</p>
+    <dl>${row('Cast', t.cast_members)}${row('Director', t.directors)}${row('Countries', t.countries)}${row('Added to Netflix', t.date_added ? String(t.date_added).slice(0, 10) : '')}</dl></div>`;
+  $('#cl').onclick = closeModal;
+  box.querySelectorAll('.chip').forEach((c) => c.onclick = () => { closeModal(); setNav(''); browse({ genre: c.dataset.genre, type: '', q: '', country: '' }); });
+}
+const closeModal = () => $('#modal').classList.remove('open');
+$('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
+document.addEventListener('keydown', (e) => e.key === 'Escape' && closeModal());
+
+function setNav(go) { document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.go === go)); }
+document.querySelectorAll('[data-go]').forEach((el) => el.onclick = () => {
+  const go = el.dataset.go; setNav(go === 'home' ? 'home' : go); $('#q').value = '';
+  window.scrollTo(0, 0);
+  go === 'home' ? home() : browse({ type: go, genre: '', country: '', q: '', sort: 'new' });
+});
+let timer;
+$('#q').oninput = (e) => { clearTimeout(timer); timer = setTimeout(() => {
+  const q = e.target.value.trim(); setNav('');
+  q ? browse({ q, type: '', genre: '', country: '' }) : (setNav('home'), home());
+}, 350); };
+window.addEventListener('scroll', () => $('#nav').classList.toggle('solid', scrollY > 40));
+
+(async () => {
+  try {
+    posters = (await api('/api/config')).posters;
+    if (posters) $('#foot').innerHTML += '<br>Posters: this product uses the TMDB API but is not endorsed or certified by TMDB.';
+    await home();
+  } catch (e) { $('#app').innerHTML = '<div class="empty" style="padding-top:120px">Could not reach the database. Check DATABASE_URL and that the SQL file was imported.</div>'; }
+})();
+</script>
+</body>
+</html>
