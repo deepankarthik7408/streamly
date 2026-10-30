@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streamly – Movies & TV Shows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1420;--panel:#151d2e;--raise:#1c263b;--line:#26324a;--text:#eef2f9;--muted:#8e9bb4;--blue:#2a74ff;--blue2:#4d8cff;--rose:#ff6b8b;--gold:#f5b83d;--green:#46d369;--pad:clamp(16px,3.2vw,46px)}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:Sora,system-ui,sans-serif;font-size:15px;line-height:1.5;min-height:100vh}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+svg{width:1.2em;height:1.2em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:2px solid var(--blue2);outline-offset:2px}
+
+/* top navigation */
+.top{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:26px;padding:14px var(--pad);background:linear-gradient(#0e1420f2,#0e1420cc);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
+.top.solid{border-color:var(--line)}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:.04em;font-size:1.05rem;cursor:pointer;white-space:nowrap}
+.logo svg{width:24px;height:24px;fill:var(--blue);stroke:none}
+.links{display:flex;gap:4px}
+.links button{position:relative;padding:8px 12px;color:var(--muted);font-size:.9rem;font-weight:500;border-radius:8px;white-space:nowrap}
+.links button:hover,.links button.on{color:var(--text)}
+.links button.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-12px;height:2px;background:var(--blue);border-radius:2px}
+.links .bd{margin-left:6px;background:var(--blue);color:#fff;border-radius:99px;font-size:.68rem;padding:1px 7px}
+.links button.admin.on::after{background:var(--rose)}
+.right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.search{position:relative;width:min(260px,32vw)}
+.search svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);width:17px;height:17px;pointer-events:none}
+.search input{width:100%;background:#ffffff0f;border:1px solid var(--line);border-radius:8px;color:var(--text);font:inherit;font-size:.86rem;padding:8px 36px 8px 12px;outline:0}
+.search input::placeholder{color:var(--muted)}
+.search input:focus{border-color:var(--blue2);background:#ffffff17}
+.bell{position:relative;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.bell:hover{color:var(--text);background:#ffffff12}
+.bell i{position:absolute;top:6px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--blue);border:2px solid var(--bg);display:none}
+.bell.new i{display:block}
+.me{display:flex;align-items:center;gap:9px;padding:3px 8px 3px 3px;border-radius:99px}
+.me:hover{background:#ffffff12}
+.av{width:34px;height:34px;border-radius:50%;background:linear-gradient(140deg,var(--blue),#7a5cff);display:grid;place-items:center;font-weight:600;font-size:.9rem}
+.av.admin{background:linear-gradient(140deg,#ff6b8b,#c2306a)}
+.me span.n{font-size:.86rem;font-weight:500}
+.pop{position:fixed;right:var(--pad);top:62px;width:min(320px,calc(100vw - 24px));background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:8px;display:none;box-shadow:0 20px 44px #000a;z-index:50;max-height:70vh;overflow:auto}
+.pop.open{display:block}
+#menu{width:230px}
+.pop .who{padding:10px 12px 12px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.pop .who b{display:block;font-size:.92rem}.pop .who span{font-size:.78rem;color:var(--muted)}
+.pop button.it{display:block;width:100%;text-align:left;padding:9px 12px;border-radius:8px;font-size:.88rem}
+.pop button.it:hover{background:var(--panel)}
+.pop h4{padding:8px 12px;font-size:.9rem;font-weight:600}
+.nt{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:8px;font-size:.84rem}
+.nt:hover{background:var(--panel)}.nt small{display:block;color:var(--muted);font-size:.72rem}
+.nt.u{border-left:2px solid var(--blue)}
+.pop .none{padding:18px 12px;color:var(--muted);font-size:.86rem}
+
+/* stars */
+.stars{display:inline-flex;gap:1px;vertical-align:middle}
+.stars i{display:inline-flex}.stars svg{width:12px;height:12px;stroke:#56637e;stroke-width:1.6}
+.stars i.f svg{fill:var(--gold);stroke:var(--gold)}
+.stars.none{opacity:.55}
+
+/* hero carousel */
+.hero{position:relative;overflow:hidden;padding:14px 0 6px}
+.track{display:flex;gap:18px;transition:transform .7s cubic-bezier(.22,.7,.2,1);will-change:transform}
+.slide{flex:0 0 min(1080px,calc(100% - 150px));height:clamp(300px,40vw,460px);border-radius:18px;background:var(--g);position:relative;overflow:hidden;opacity:.4;transform:scale(.97);transition:opacity .6s,transform .6s}
+.slide.on{opacity:1;transform:none}
+.slide::before{content:"";position:absolute;inset:0;background:radial-gradient(60% 90% at 78% 40%,#ffffff1f,#0000 70%)}
+.sart{position:absolute;right:0;top:0;bottom:0;width:58%;background:center 20%/cover no-repeat;-webkit-mask-image:linear-gradient(90deg,transparent,#000 45%);mask-image:linear-gradient(90deg,transparent,#000 45%);opacity:0;transition:opacity .6s}
+.sart.has{opacity:1}
+.slide::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#0e1420d9 0%,#0e142080 45%,#0e142000 80%),linear-gradient(0deg,#0e1420cc,#0e142000 40%)}
+.scopy{position:absolute;z-index:2;left:clamp(20px,4vw,52px);bottom:clamp(24px,5vw,52px);max-width:min(520px,60%)}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.pill{border:1px solid #ffffff3a;background:#ffffff14;border-radius:99px;padding:2px 12px;font-size:.76rem;color:#e8edf7}
+.scopy h1{font-weight:700;font-size:clamp(1.8rem,4.6vw,3.4rem);line-height:1.04;letter-spacing:-.03em;margin-bottom:12px;text-wrap:balance}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;color:#c4cee0;font-size:.82rem}
+.meta .r{border:1px solid #ffffff44;border-radius:4px;padding:0 6px;color:#fff;font-size:.74rem}
+.meta .match{color:var(--green);font-weight:600}
+.scopy .desc{color:#d3dbea;font-size:.88rem;margin:12px 0 18px;max-width:46ch;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.acts{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:6px;font-weight:600;font-size:.84rem;text-decoration:none;border:1px solid transparent;transition:filter .15s,background .15s}
+.btn.p{background:var(--blue);color:#fff}.btn.p:hover{filter:brightness(1.15)}
+.btn.s{background:#0e142099;color:#fff;border-color:#ffffff66}.btn.s:hover{background:#ffffff26}
+.btn.s.on{border-color:var(--blue2);color:var(--blue2)}
+.btn svg{width:16px;height:16px}
+.hn{position:absolute;top:50%;z-index:5;width:44px;height:44px;border-radius:50%;background:#0e1420cc;border:1px solid #ffffff2a;display:grid;place-items:center;transform:translateY(-50%)}
+.hn:hover{background:var(--blue);border-color:var(--blue)}
+.hn.l{left:12px}.hn.r{right:12px}
+.dots{display:flex;justify-content:center;gap:8px;padding:14px 0 4px}
+.dots button{width:7px;height:7px;border-radius:50%;background:#ffffff40;padding:0;transition:width .3s,background .3s}
+.dots button.on{width:26px;border-radius:7px;background:var(--text)}
+
+/* sections, rows, cards */
+.sec{padding:0 var(--pad);margin:30px 0}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+.sec-h h2{font-weight:600;font-size:1.3rem;letter-spacing:-.015em}
+.sec-h button{color:var(--muted);font-size:.84rem}.sec-h button:hover{color:var(--blue2)}
+.rw{position:relative}
+.row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 0 8px;scrollbar-width:none}
+.row::-webkit-scrollbar{display:none}
+.row .card{flex:0 0 clamp(120px,12.5vw,158px);scroll-snap-align:start}
+.row .card.wide{flex-basis:clamp(220px,23vw,300px)}
+.arr{position:absolute;top:calc(50% - 40px);width:36px;height:36px;border-radius:50%;background:#0e1420e8;border:1px solid var(--line);display:grid;place-items:center;z-index:3;opacity:0;transition:opacity .2s}
+.rw:hover .arr{opacity:1}.arr.l{left:-12px}.arr.r{right:-12px}.arr:hover{background:var(--blue);border-color:var(--blue)}
+.ghost{border:1px dashed var(--line);border-radius:12px;padding:26px 20px;color:var(--muted);font-size:.86rem;background:#ffffff05}
+.ghost b{display:block;color:var(--text);font-weight:600;margin-bottom:3px}
+.ghost code{background:var(--raise);border-radius:5px;padding:1px 6px;font-size:.78rem;color:var(--blue2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(120px,12.5vw,158px),1fr));gap:24px 14px}
+.card{display:block;cursor:pointer;outline-offset:4px}
+.art{position:relative;aspect-ratio:2/3;border-radius:10px;background:var(--g) center/cover;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.card.wide .art{aspect-ratio:16/9;background-position:center 18%}
+.card:hover .art,.card:focus-visible .art{transform:translateY(-4px);box-shadow:0 16px 30px #000b}
+.ph{position:absolute;inset:0;display:flex;align-items:flex-end;padding:12px;font-weight:700;line-height:1.1;font-size:.98rem;letter-spacing:-.01em;background:linear-gradient(0deg,#0006,#0000 60%)}
+.art.has .ph{display:none}
+.prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:#ffffff33}
+.prog i{display:block;height:100%;background:var(--blue)}
+.ct{display:block;margin-top:9px;font-weight:600;font-size:.84rem;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.74rem;margin-top:3px}
+.cm .r{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:.68rem}
+.save{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;background:#0e1420cc;display:grid;place-items:center;opacity:0;transition:opacity .2s;z-index:2}
+.card:hover .save,.card:focus-within .save,.save.on{opacity:1}
+.save svg{width:15px;height:15px}.save.on{color:var(--blue2)}.save.on svg{fill:currentColor}
+@media(hover:none){.save{opacity:1}}
+.gt{position:relative;flex:0 0 clamp(150px,16vw,200px);height:78px;border-radius:12px;background:var(--g) center/cover;display:grid;place-items:center;font-weight:600;font-size:1rem;text-align:center;padding:0 10px;border:1px solid #ffffff12;transition:transform .2s,border-color .2s;overflow:hidden}
+.gt.img::before{content:"";position:absolute;inset:0;background:#0e142088}
+.gt span{position:relative}
+.gt:hover{transform:translateY(-3px);border-color:var(--blue2)}
+
+/* browse */
+.bar{padding:28px var(--pad) 4px}
+.bar h2{font-weight:700;font-size:clamp(1.6rem,3vw,2.2rem);letter-spacing:-.025em}
+.bar h2 small{font-weight:400;color:var(--muted);font-size:.9rem;margin-left:10px;letter-spacing:0}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px}
+.seg button{padding:6px 15px;border-radius:6px;font-size:.84rem;color:var(--muted)}
+.seg button.on{background:var(--blue);color:#fff;font-weight:600}
+select,.yr{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;font-size:.84rem;max-width:170px}
+.yr{width:96px}
+select:focus,.yr:focus{border-color:var(--blue2);outline:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:3px 12px;font-size:.8rem}
+.chip.k:hover,.kv .chip:hover{border-color:var(--blue2)}
+.sentinel{height:60px;display:grid;place-items:center;color:var(--muted);font-size:.84rem}
+.empty{padding:70px var(--pad);color:var(--muted);max-width:56ch}
+.empty h3{color:var(--text);font-size:1.3rem;margin-bottom:6px;font-weight:600}
+
+/* modal */
+#modal{position:fixed;inset:0;background:#05080fcc;z-index:70;display:none;align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
+#modal.open{display:flex}
+.box{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(780px,100%);overflow:hidden}
+.box .hd{padding:80px 30px 22px;background:linear-gradient(0deg,var(--panel) 4%,#151d2e00),var(--g) center/cover}
+.box h2{font-weight:700;font-size:clamp(1.6rem,4vw,2.3rem);line-height:1.1;letter-spacing:-.025em;margin-bottom:16px}
+.box .bd{padding:6px 30px 30px}
+.box .x{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:50%;background:#0e1420b3;display:grid;place-items:center;z-index:2}
+.box p{margin:14px 0;max-width:64ch;color:#d3dbea}
+.rate{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:.84rem;color:var(--muted)}
+.rate .stars svg{width:22px;height:22px}.rate .stars button{display:inline-flex;padding:2px}
+.rate .stars button:hover svg{stroke:var(--gold)}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:10px 14px;margin-top:18px;font-size:.88rem}
+.kv dt{color:var(--muted)}.kv dd{margin:0;display:flex;flex-wrap:wrap;gap:6px}
+.kv .chip{cursor:pointer}
+.box h3{font-weight:600;font-size:1.1rem;margin:28px 0 12px}
+.box .row .card{flex-basis:118px}
+.aw{list-style:none;padding:0;display:grid;gap:8px;font-size:.88rem}
+.aw li{display:flex;gap:10px;align-items:baseline}
+.aw .w{color:var(--gold);font-weight:600}.aw .nm{color:var(--muted)}
+.eps{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.ep{display:grid;grid-template-columns:64px 1fr auto;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:.86rem}
+.ep:last-child{border:0}.ep em{font-style:normal;color:var(--muted)}.ep small{grid-column:2/4;color:var(--muted);font-size:.78rem}
+
+/* admin */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.tile b{display:block;font-weight:700;font-size:1.9rem;letter-spacing:-.03em}
+.tile span{color:var(--muted);font-size:.84rem}
+.panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px}
+.pn{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0}
+.pn h3{font-weight:600;font-size:1rem;margin-bottom:14px}
+.hb{display:grid;grid-template-columns:minmax(80px,38%) 1fr auto;gap:10px;align-items:center;font-size:.82rem;margin-bottom:8px}
+.hb .t{height:8px;border-radius:8px;background:var(--raise);overflow:hidden}.hb .t i{display:block;height:100%;background:var(--blue);border-radius:8px}
+.hb span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb em{font-style:normal;color:var(--muted)}
+.cols{display:flex;align-items:flex-end;gap:6px;height:170px}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%;font-size:.68rem;color:var(--muted)}
+.col i{display:block;width:100%;background:var(--blue);border-radius:5px 5px 0 0;min-height:2px}
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:500}
+.role{border-radius:99px;padding:1px 10px;font-size:.74rem;border:1px solid var(--line)}.role.admin{border-color:var(--rose);color:#ff9bb1}
+.role.ok{border-color:#2f7a45;color:var(--green)}.role.no{color:var(--muted)}
+.pn.wide{grid-column:1/-1}
+
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 20px;font-size:.86rem;opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+footer{margin-top:50px;border-top:1px solid var(--line);padding:26px var(--pad) 40px;color:var(--muted);font-size:.8rem}
+footer .fl{display:flex;flex-wrap:wrap;gap:8px 28px;margin-bottom:14px}
+footer .fl button{color:var(--muted);font-size:.86rem}footer .fl button:hover{color:var(--text)}
+
+@media(max-width:900px){
+  .top{flex-wrap:wrap;gap:10px 14px;padding-bottom:0}
+  .links{order:3;width:100%;overflow-x:auto;scrollbar-width:none;margin:0 -4px}.links::-webkit-scrollbar{display:none}
+  .links button.on::after{bottom:0}
+  .me span.n{display:none}
+  .slide{flex-basis:calc(100% - 64px)}.scopy{max-width:86%}.hn{display:none}.sart{width:80%}
+  .scopy .desc{display:none}
+  .pop{top:56px}
+}
+@media(max-width:560px){.search{width:auto;flex:1}.right{flex:1}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="top" id="top">
+  <div class="logo" data-view="home"><svg viewBox="0 0 24 24"><path d="M5 3l16 9-16 9z"/></svg>STREAMLY</div>
+  <nav class="links" id="links" aria-label="Main"></nav>
+  <div class="right">
+    <div class="search">
+      <input id="q" type="search" placeholder="Search movies, shows…" autocomplete="off" aria-label="Search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    </div>
+    <button class="bell" id="bell" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg><i></i></button>
+    <button class="me" id="me" aria-haspopup="true" aria-expanded="false" aria-label="Account menu"><span class="av" id="av"></span><span class="n" id="nm"></span></button>
+  </div>
+</header>
+<div class="pop" id="menu" role="menu"></div>
+<div class="pop" id="notif"></div>
+<main id="app"></main>
+<footer>
+  <div class="fl"><button id="f-acc">Account</button><button data-soon>Help Center</button><button data-soon>Terms</button><button data-soon>Privacy</button></div>
+  <div id="foot">Data: Netflix titles dataset. Streamly is a demo catalog app and does not stream video.</div>
+</footer>
+<div id="modal" aria-modal="true" role="dialog"><div class="box" id="box"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const api = (p, o) => fetch(p, o).then((r) => {
+  if (r.status === 401) { location.href = '/login'; throw new Error('auth'); }
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+});
+
+const IC = {
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor" stroke="none"/></svg>',
+  info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+  x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  xs: '<svg viewBox="0 0 24 24" width="12" height="12"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  l: '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  r: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>',
+  bm: '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>',
+};
+
+/* ---------- state ---------- */
+let me, F = {}, posters = false, filters = null, view = 'home', listIds = [];
+const BASE = { type: '', genre: '', country: '', rating: '', year: '', sort: 'new', q: '', page: 1 };
+const state = { ...BASE };
+let reqTok = 0, heroTimer, heroIdx = 0, heroData = [], heroPaused = false, loading = false, more = false;
+
+/* ---------- My List & recently viewed ----------
+   Saved in the database when the my_list / title_views tables exist,
+   otherwise in this browser so the buttons still work. */
+const lk = (k) => `streamly:${k}:${me.username}`;
+const lsRead = (k) => { try { return JSON.parse(localStorage.getItem(lk(k)) || '[]'); } catch { return []; } };
+const lsWrite = (k, v) => { try { localStorage.setItem(lk(k), JSON.stringify(v)); } catch {} };
+const inList = (id) => listIds.includes(Number(id));
+async function loadList() { listIds = F.my_list ? (await api('/api/me/list')).ids.map(Number) : lsRead('list'); }
+async function recentIds() { return F.title_views ? (await api('/api/me/recent')).ids : lsRead('recent'); }
+function recordView(id) {
+  if (F.title_views) fetch('/api/me/view/' + id, { method: 'POST' }).catch(() => {});
+  else lsWrite('recent', [Number(id), ...lsRead('recent').filter((x) => x !== Number(id))].slice(0, 20));
+}
+function toggleList(id, title) {
+  id = Number(id);
+  const adding = !inList(id);
+  listIds = adding ? [id, ...listIds] : listIds.filter((x) => x !== id);
+  if (F.my_list) fetch(`/api/me/list/${id}`, { method: adding ? 'PUT' : 'DELETE' }).then((r) => { if (!r.ok) throw 0; }).catch(() => toast('Couldn’t save your list'));
+  else lsWrite('list', listIds);
+  toast(adding ? `Added “${title}” to My List` : `Removed “${title}” from My List`);
+  $$(`[data-save="${id}"]`).forEach((b) => {
+    b.classList.toggle('on', adding);
+    const lb = $('.lbl', b); if (lb) lb.textContent = adding ? 'In My List' : 'My List';
+    const ic = $('.ic', b); if (ic) ic.innerHTML = adding ? IC.check : IC.plus;
+  });
+  badge();
+  if (view === 'list') renderList();
+}
+function badge() {
+  const b = $('#links [data-view="list"] .bd'), n = listIds.length;
+  if (b) { b.textContent = n; b.style.display = n ? '' : 'none'; }
+}
+
+/* ---------- helpers ---------- */
+const dur = (t) => t.duration_value ? (t.duration_unit === 'min' ? `${t.duration_value} min` : `${t.duration_value} Season${t.duration_value > 1 ? 's' : ''}`) : '';
+const grad = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `linear-gradient(155deg,hsl(${h} 42% 30%),hsl(${(h + 50) % 360} 52% 12%))`; };
+const trailer = (t) => `https://www.youtube.com/results?search_query=${encodeURIComponent(t.title + ' ' + t.release_year + ' trailer')}`;
+const kind = (t) => t.type === 'Movie' ? 'Movie' : 'Series';
+const stars = (avg, cnt) => { const n = Math.round(Number(avg) || 0);
+  return `<span class="stars ${avg ? '' : 'none'}" title="${avg ? `${avg} from ${cnt} rating${cnt === 1 ? '' : 's'}` : 'No ratings yet'}">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? 'f' : ''}">${IC.star}</i>`).join('')}</span>`; };
+const metaHtml = (t) => `<div class="meta">${t.match_percent != null ? `<span class="match">${t.match_percent}% Match</span>` : ''}<span>${t.release_year}</span><span class="r">${esc(t.rating || 'NR')}</span>${dur(t) ? `<span>${esc(dur(t))}</span>` : ''}<span>${kind(t)}</span><span>${stars(t.avg_rating, t.rating_count)}${t.avg_rating ? ` ${t.avg_rating}` : ''}</span></div>`;
+const playUrl = (t) => t.video_url || t.trailer_url || trailer(t);
+const playBtn = (t) => `<a class="btn p" target="_blank" rel="noopener" href="${esc(playUrl(t))}">${IC.play} Play now</a>`;
+const saveBtn = (t) => `<button class="btn s ${inList(t.show_id) ? 'on' : ''}" data-save="${t.show_id}" data-title="${esc(t.title)}"><span class="ic">${inList(t.show_id) ? IC.check : IC.plus}</span><span class="lbl">${inList(t.show_id) ? 'In My List' : 'My List'}</span></button>`;
+const cssUrl = (u) => `url("${String(u).replace(/["\\()\s]/g, encodeURIComponent)}")`;
+
+let tt;
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 2200); }
+
+// TMDB fallback only when a title has no poster in title_media
+const pcache = new Map();
+function posterFor(t) {
+  const k = `${t.type}|${t.title}|${t.release_year}`;
+  if (!pcache.has(k)) pcache.set(k, api(`/api/poster?title=${encodeURIComponent(t.title)}&year=${t.release_year}&type=${encodeURIComponent(t.type)}`).then((r) => r.url).catch(() => null));
+  return pcache.get(k);
+}
+const io = new IntersectionObserver((es) => es.forEach(async (e) => {
+  if (!e.isIntersecting) return;
+  io.unobserve(e.target);
+  const d = e.target.dataset;
+  const url = await posterFor({ title: d.t, release_year: d.y, type: d.k });
+  if (url) { e.target.style.backgroundImage = cssUrl(url); e.target.classList.add('has'); }
+}), { rootMargin: '250px' });
+
+function card(t, opts = {}) {
+  const wide = !!opts.wide;
+  const el = document.createElement('article');
+  el.className = 'card' + (wide ? ' wide' : '');
+  el.tabIndex = 0; el.dataset.open = t.show_id;
+  el.setAttribute('role', 'button'); el.setAttribute('aria-label', t.title);
+  const pct = opts.cont && t.duration_seconds ? Math.min(100, Math.round(t.progress_seconds / t.duration_seconds * 100)) : null;
+  const label = opts.cont && t.episode_no ? `${t.title} · Ep ${t.episode_no}` : t.title;
+  el.innerHTML = `<div class="art" data-t="${esc(t.title)}" data-y="${t.release_year}" data-k="${esc(t.type)}" style="--g:${grad(t.title)}"><span class="ph">${esc(t.title)}</span>
+      <button class="save ${inList(t.show_id) ? 'on' : ''}" data-save="${t.show_id}" data-title="${esc(t.title)}" aria-label="Add ${esc(t.title)} to My List">${IC.bm}</button>
+      ${pct !== null ? `<div class="prog"><i style="width:${pct}%"></i></div>` : ''}</div>
+    <span class="ct">${esc(label)}</span><div class="cm"><span>${t.release_year}</span><span class="r">${esc(t.rating || 'NR')}</span>${stars(t.avg_rating, t.rating_count)}</div>`;
+  const art = $('.art', el), img = wide ? (t.backdrop_url || t.poster_url) : t.poster_url;
+  if (img) { art.style.backgroundImage = cssUrl(img); art.classList.add('has'); }
+  else if (posters) io.observe(art);
+  return el;
+}
+
+function rowSection(name, items, o = {}) {
+  const s = document.createElement('section'); s.className = 'sec';
+  if (!items.length) {
+    const hint = me.role === 'admin' && o.hint ? ` Fill <code>${esc(o.hint)}</code> to populate it.` : '';
+    s.innerHTML = `<div class="sec-h"><h2>${esc(name)}</h2></div><div class="ghost"><b>No data yet</b>Nothing to show in this row.${hint}</div>`;
+    return s;
+  }
+  s.innerHTML = `<div class="sec-h"><h2>${esc(name)}</h2>${o.onAll ? '<button>See all</button>' : ''}</div>
+    <div class="rw"><button class="arr l" aria-label="Scroll left">${IC.l}</button><div class="row"></div><button class="arr r" aria-label="Scroll right">${IC.r}</button></div>`;
+  const row = $('.row', s);
+  items.forEach((t) => row.append(card(t, o)));
+  if (o.onAll) $('.sec-h button', s).onclick = o.onAll;
+  $('.arr.l', s).onclick = () => row.scrollBy({ left: -row.clientWidth * .85, behavior: 'smooth' });
+  $('.arr.r', s).onclick = () => row.scrollBy({ left: row.clientWidth * .85, behavior: 'smooth' });
+  return s;
+}
+function genreTiles(list) {
+  const s = document.createElement('section'); s.className = 'sec';
+  s.innerHTML = `<div class="sec-h"><h2>Popular genres</h2></div><div class="rw"><div class="row"></div></div>`;
+  list.forEach((g) => {
+    const b = document.createElement('button'); b.className = 'gt'; b.style.setProperty('--g', grad(g.name));
+    b.innerHTML = `<span>${esc(g.name)}</span>`;
+    if (g.image_url) { b.classList.add('img'); b.style.backgroundImage = cssUrl(g.image_url); }
+    b.onclick = () => go('browse', { genre: g.name });
+    $('.row', s).append(b);
+  });
+  return s;
+}
+
+/* ---------- navigation ---------- */
+function buildNav() {
+  const items = [['home', 'Home'], ['tv', 'TV Shows'], ['movies', 'Movies'], ['new', 'New & Popular'], ['list', 'My List']];
+  if (me.role === 'admin') items.push(['admin', 'Admin']);
+  $('#links').innerHTML = items.map(([v, l]) => `<button data-view="${v}" class="${v === 'admin' ? 'admin' : ''}">${l}${v === 'list' ? '<b class="bd" style="display:none"></b>' : ''}</button>`).join('');
+  $$('[data-view]', $('#top')).forEach((b) => b.onclick = () => { $('#q').value = ''; go(b.dataset.view); });
+  badge();
+}
+const setNav = (v) => $$('#links button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+
+async function go(v, patch = {}) {
+  view = v; ++reqTok; clearInterval(heroTimer); closePops();
+  window.scrollTo(0, 0);
+  history.replaceState(null, '', '#' + v);
+  try {
+    if (v === 'home') { setNav('home'); await home(); }
+    else if (v === 'movies') { Object.assign(state, BASE, { type: 'Movie' }, patch); await renderBrowse(); }
+    else if (v === 'tv') { Object.assign(state, BASE, { type: 'TV Show' }, patch); await renderBrowse(); }
+    else if (v === 'new' || v === 'browse') { Object.assign(state, BASE, patch); await renderBrowse(); }
+    else if (v === 'list') { setNav('list'); await renderList(); }
+    else if (v === 'admin' && me.role === 'admin') { setNav('admin'); await renderAdmin(); }
+    else return go('home');
+  } catch (e) { if (e.message !== 'auth') fail(); }
+}
+function fail() {
+  $('#app').innerHTML = `<div class="empty"><h3>Couldn’t load the catalog</h3>Check that DATABASE_URL is set and the SQL file was imported into your Aiven database, then refresh the page.</div>`;
+}
+
+/* ---------- home ---------- */
+async function home() {
+  const app = $('#app');
+  app.innerHTML = '<div class="empty">Loading…</div>';
+  const tok = reqTok;
+  const bulk = (a) => a.length ? api('/api/titles/bulk?ids=' + a.slice(0, 20).join(',')) : [];
+  const [feat, rows, cont, mine, recent, gen] = await Promise.all([
+    api('/api/featured?n=5'), api('/api/rows'), api('/api/me/continue'), bulk(listIds), recentIds().then(bulk), api('/api/genres/popular'),
+  ]);
+  if (tok !== reqTok) return;
+
+  app.innerHTML = '';
+  heroData = feat; heroIdx = 0;
+  app.append(buildHero());
+  heroTimer = setInterval(() => { if (view === 'home' && !heroPaused && !document.hidden && heroData.length > 1) moveHero(heroIdx + 1); }, 8000);
+
+  app.append(rowSection('Continue watching', cont, { wide: true, cont: true, hint: 'watch_progress' }));
+  const goRow = (r) => r.genre ? () => go('browse', { genre: r.genre }) : r.type ? () => go(r.type === 'Movie' ? 'movies' : 'tv', { sort: 'year' }) : () => go('new');
+  rows.forEach((r, i) => {
+    app.append(rowSection(r.name, r.items, { onAll: r.items.length ? goRow(r) : null, hint: r.hint }));
+    if (i === 1 && gen.length) app.append(genreTiles(gen));
+  });
+  if (mine.length) app.append(rowSection('My List', mine, { onAll: () => go('list') }));
+  if (recent.length) app.append(rowSection('Recently viewed', recent));
+}
+
+function buildHero() {
+  const h = document.createElement('section'); h.className = 'hero'; h.id = 'hero';
+  if (!heroData.length) { h.innerHTML = '<div class="empty">No titles found in the catalog yet.</div>'; return h; }
+  h.innerHTML = `<div class="track" id="track">${heroData.map((f, i) => {
+    const gs = (f.genres || '').split(', ').filter(Boolean).slice(0, 3);
+    return `<article class="slide ${i === 0 ? 'on' : ''}" style="--g:${grad(f.title)}"><div class="sart" id="sa${i}"></div>
+      <div class="scopy"><div class="pills">${gs.map((g) => `<span class="pill">${esc(g)}</span>`).join('')}</div>
+      <h1>${esc(f.title)}</h1>${metaHtml(f)}<p class="desc">${esc(f.description)}</p>
+      <div class="acts">${playBtn(f)}${saveBtn(f)}<button class="btn s" data-open="${f.show_id}">${IC.info} Details</button></div></div></article>`;
+  }).join('')}</div>
+  <button class="hn l" aria-label="Previous">${IC.l}</button><button class="hn r" aria-label="Next">${IC.r}</button>
+  <div class="dots">${heroData.map((_, i) => `<button class="${i === 0 ? 'on' : ''}" data-dot="${i}" aria-label="Spotlight ${i + 1}"></button>`).join('')}</div>`;
+  $('.hn.l', h).onclick = () => moveHero(heroIdx - 1);
+  $('.hn.r', h).onclick = () => moveHero(heroIdx + 1);
+  h.onmouseenter = () => heroPaused = true; h.onmouseleave = () => heroPaused = false;
+  requestAnimationFrame(() => placeHero(false));
+  heroData.forEach((f, i) => {
+    const a = () => $('#sa' + i), set = (u) => { const el = a(); if (u && el) { el.style.backgroundImage = cssUrl(u); el.classList.add('has'); } };
+    const img = f.backdrop_url || f.poster_url;
+    if (img) set(img); else if (posters) posterFor(f).then(set);
+  });
+  let sx = null;
+  h.addEventListener('pointerdown', (e) => { if (!e.target.closest('a,button')) sx = e.clientX; });
+  h.addEventListener('pointerup', (e) => { if (sx !== null && Math.abs(e.clientX - sx) > 50) moveHero(heroIdx + (e.clientX < sx ? 1 : -1)); sx = null; });
+  return h;
+}
+function placeHero(anim = true) {
+  const h = $('#hero'), tr = $('#track'); if (!h || !tr) return;
+  const s = $$('.slide', tr)[heroIdx]; if (!s) return;
+  tr.style.transition = anim ? '' : 'none';
+  tr.style.transform = `translateX(${(h.clientWidth - s.offsetWidth) / 2 - s.offsetLeft}px)`;
+  $$('.slide', tr).forEach((x, i) => x.classList.toggle('on', i === heroIdx));
+  $$('.dots button', h).forEach((x, i) => x.classList.toggle('on', i === heroIdx));
+}
+function moveHero(i) { if (!heroData.length) return; heroIdx = (i + heroData.length) % heroData.length; placeHero(); }
+window.addEventListener('resize', () => placeHero(false));
+
+/* ---------- browse ---------- */
+async function renderBrowse() {
+  const tok = reqTok;
+  if (!filters) filters = await api('/api/filters');
+  const plain = !state.q && !state.genre && !state.country && !state.rating && !state.year;
+  setNav(state.q ? '' : state.type === 'Movie' ? 'movies' : state.type === 'TV Show' ? 'tv' : plain ? 'new' : '');
+  const opt = (arr, cur, all) => `<option value="">${all}</option>` + arr.map((x) => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('');
+  const heading = state.q ? `Results for “${esc(state.q)}”` : state.genre || (state.type === 'Movie' ? 'Movies' : state.type === 'TV Show' ? 'TV Shows' : 'New & Popular');
+  const act = [['genre', state.genre], ['country', state.country], ['rating', state.rating], ['year', state.year]].filter(([, v]) => v);
+  $('#app').innerHTML = `<div class="bar"><h2>${heading}<small id="cnt"></small></h2>
+    <div class="filters">
+      <div class="seg" role="group" aria-label="Type">${[['', 'All'], ['Movie', 'Movies'], ['TV Show', 'TV Shows']].map(([v, l]) => `<button data-type="${v}" class="${state.type === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <select id="fg" aria-label="Genre">${opt(filters.genres, state.genre, 'All genres')}</select>
+      <select id="fc" aria-label="Country">${opt(filters.countries, state.country, 'All countries')}</select>
+      <select id="fr" aria-label="Maturity rating">${opt(filters.ratings, state.rating, 'Any rating')}</select>
+      <input class="yr" id="fy" type="number" min="1925" max="2100" placeholder="Year" value="${esc(state.year)}" aria-label="Release year">
+      <select id="fs" aria-label="Sort"><option value="new" ${state.sort === 'new' ? 'selected' : ''}>Recently added</option><option value="year" ${state.sort === 'year' ? 'selected' : ''}>Release year</option><option value="az" ${state.sort === 'az' ? 'selected' : ''}>A to Z</option>${F.title_stats ? `<option value="rating" ${state.sort === 'rating' ? 'selected' : ''}>Top rated</option>` : ''}</select>
+    </div>
+    ${act.length ? `<div class="chips">${act.map(([k, v]) => `<button class="chip k" data-clear="${k}">${esc(v)} ${IC.xs}</button>`).join('')}<button class="chip k" data-clear="all">Clear all</button></div>` : ''}
+  </div><section class="sec"><div class="grid" id="grid"></div><div class="sentinel" id="sent"></div></section>`;
+  const re = (p) => { Object.assign(state, p, { page: 1 }); renderBrowse(); };
+  $$('[data-type]').forEach((b) => b.onclick = () => re({ type: b.dataset.type }));
+  $('#fg').onchange = (e) => re({ genre: e.target.value });
+  $('#fc').onchange = (e) => re({ country: e.target.value });
+  $('#fr').onchange = (e) => re({ rating: e.target.value });
+  $('#fs').onchange = (e) => re({ sort: e.target.value });
+  $('#fy').onchange = (e) => re({ year: e.target.value });
+  $$('[data-clear]').forEach((b) => b.onclick = () => re(b.dataset.clear === 'all' ? { genre: '', country: '', rating: '', year: '' } : { [b.dataset.clear]: '' }));
+  new IntersectionObserver((es) => { if (es[0].isIntersecting && more && !loading) { state.page++; loadPage(); } }, { rootMargin: '500px' }).observe($('#sent'));
+  state.page = 1; more = false;
+  if (tok === reqTok) await loadPage();
+}
+
+async function loadPage() {
+  loading = true;
+  const tok = reqTok, snap = JSON.stringify({ ...state, page: 0 });
+  try {
+    const data = await api('/api/titles?' + new URLSearchParams({ ...state, limit: 24 }));
+    if (tok !== reqTok || snap !== JSON.stringify({ ...state, page: 0 })) return;
+    const grid = $('#grid'); if (!grid) return;
+    if (state.page === 1) $('#cnt').textContent = `${data.total.toLocaleString()} titles`;
+    if (!data.items.length && state.page === 1) {
+      $('#sent').remove();
+      grid.outerHTML = `<div class="empty"><h3>No titles match</h3>Try a different spelling, or remove a filter to widen the search.</div>`;
+      more = false; return;
+    }
+    data.items.forEach((t) => grid.append(card(t)));
+    more = state.page * 24 < data.total;
+    const s = $('#sent'); if (s) s.textContent = more ? 'Loading more…' : (data.total > 24 ? 'You’ve reached the end' : '');
+  } catch (e) { if (e.message !== 'auth') toast('Couldn’t load more titles'); }
+  finally { loading = false; }
+}
+
+/* ---------- my list ---------- */
+async function renderList() {
+  const app = $('#app');
+  if (!listIds.length) {
+    app.innerHTML = `<div class="bar"><h2>My List</h2></div><div class="empty"><h3>Nothing saved yet</h3>Tap the bookmark on any title to keep it here.</div>`;
+    return;
+  }
+  const items = await api('/api/titles/bulk?ids=' + listIds.slice(0, 200).join(','));
+  app.innerHTML = `<div class="bar"><h2>My List<small>${items.length} titles</small></h2></div><section class="sec"><div class="grid"></div></section>`;
+  items.forEach((t) => $('.grid', app).append(card(t)));
+}
+
+/* ---------- admin ---------- */
+const TABLE_NOTES = { users: 'Accounts (login is still hardcoded)', title_media: 'Posters, backdrops, trailers', title_stats: 'Star ratings, match %, trending', user_ratings: 'Member star ratings', awards: 'Award names', title_awards: 'Award-winning row & awards list', episodes: 'Episode lists for shows', watch_progress: 'Continue watching', my_list: 'My List saved in the database', title_views: 'Recently viewed', notifications: 'Bell notifications', collections: 'Curated home rows & hero', collection_titles: 'Titles inside collections', genre_art: 'Genre tile images' };
+async function renderAdmin() {
+  const app = $('#app');
+  app.innerHTML = '<div class="empty">Loading dashboard…</div>';
+  const d = await api('/api/admin/stats');
+  if (view !== 'admin') return;
+  const hbars = (arr) => { const m = Math.max(...arr.map((x) => x.n), 1);
+    return arr.map((x) => `<div class="hb"><span title="${esc(x.name)}">${esc(x.name)}</span><span class="t"><i style="width:${(x.n / m * 100).toFixed(1)}%"></i></span><em>${x.n.toLocaleString()}</em></div>`).join(''); };
+  const my = Math.max(...d.byYear.map((x) => x.n), 1);
+  app.innerHTML = `<div class="bar"><h2>Admin dashboard</h2></div>
+  <section class="sec">
+    <div class="tiles">
+      <div class="tile"><b>${d.total.toLocaleString()}</b><span>Titles in catalog</span></div>
+      <div class="tile"><b>${d.movies.toLocaleString()}</b><span>Movies</span></div>
+      <div class="tile"><b>${d.shows.toLocaleString()}</b><span>TV shows</span></div>
+      <div class="tile"><b>${d.tables.filter((t) => t.exists).length}/${d.tables.length}</b><span>Optional tables created</span></div>
+    </div>
+    <div class="panels">
+      <div class="pn wide"><h3>Database setup</h3><table><tr><th>Table</th><th>Used for</th><th>Status</th><th>Rows</th></tr>${d.tables.map((t) => `<tr><td><code>${esc(t.name)}</code></td><td>${esc(TABLE_NOTES[t.name] || '')}</td><td><span class="role ${t.exists ? 'ok' : 'no'}">${t.exists ? 'Ready' : 'Not created'}</span></td><td>${t.rows == null ? '–' : t.rows.toLocaleString()}</td></tr>`).join('')}</table></div>
+      <div class="pn"><h3>Titles by release year</h3><div class="cols">${d.byYear.map((x) => `<div class="col" title="${x.name}: ${x.n}"><i style="height:${(x.n / my * 100).toFixed(1)}%"></i>${String(x.name).slice(2)}</div>`).join('')}</div></div>
+      <div class="pn"><h3>Top genres</h3>${hbars(d.genres)}</div>
+      <div class="pn"><h3>Top countries</h3>${hbars(d.countries)}</div>
+      <div class="pn"><h3>Maturity ratings</h3>${hbars(d.ratings)}</div>
+      <div class="pn"><h3>Accounts</h3><table><tr><th>Name</th><th>Username</th><th>Role</th></tr>${d.accounts.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.username)}</td><td><span class="role ${a.role}">${a.role}</span></td></tr>`).join('')}</table></div>
+    </div>
+  </section>`;
+}
+
+/* ---------- title details ---------- */
+async function openModal(id) {
+  const box = $('#box'); $('#modal').classList.add('open'); document.body.style.overflow = 'hidden';
+  box.innerHTML = '<div class="bd" style="padding:80px 30px">Loading…</div>';
+  let t, sim = [], eps = [];
+  try {
+    [t, sim, eps] = await Promise.all([api('/api/titles/' + id), api(`/api/titles/${id}/similar`).catch(() => []), F.episodes ? api(`/api/titles/${id}/episodes`).catch(() => []) : []]);
+  } catch (e) { if (e.message !== 'auth') box.innerHTML = '<div class="bd" style="padding:80px 30px">Couldn’t load this title.</div>'; return; }
+  recordView(id);
+  const chips = (str, key) => (str || '').split(', ').filter(Boolean).map((v) => `<span class="chip" data-${key}="${esc(v)}">${esc(v)}</span>`).join('');
+  const kv = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : '';
+  const hdImg = t.backdrop_url || t.poster_url;
+  const rate = F.user_ratings && F.title_stats ? `<div class="rate"><span>Your rating</span><span class="stars" id="myr">${[1, 2, 3, 4, 5].map((i) => `<button data-rate="${i}" data-id="${t.show_id}" aria-label="Rate ${i} star${i > 1 ? 's' : ''}"><i class="${i <= (t.my_rating || 0) ? 'f' : ''}">${IC.star}</i></button>`).join('')}</span></div>` : '';
+  const awards = (t.awards || []).length ? `<h3>Awards</h3><ul class="aw">${t.awards.map((a) => `<li><span class="${a.result === 'won' ? 'w' : 'nm'}">${a.result === 'won' ? 'Won' : 'Nominated'}</span><span>${esc(a.name)}${a.category ? ' – ' + esc(a.category) : ''}${a.award_year ? ` (${a.award_year})` : ''}</span></li>`).join('')}</ul>` : '';
+  const episodes = (eps || []).length ? `<h3>Episodes</h3><div class="eps">${eps.map((e) => `<div class="ep"><em>S${e.season_no} E${e.episode_no}</em><span>${esc(e.title)}</span><em>${e.duration_min ? e.duration_min + ' min' : ''}</em>${e.description ? `<small>${esc(e.description)}</small>` : ''}</div>`).join('')}</div>` : '';
+  box.style.setProperty('--g', grad(t.title));
+  box.innerHTML = `<button class="x" data-close aria-label="Close">${IC.x}</button>
+    <div class="hd"><h2>${esc(t.title)}</h2><div class="acts">${playBtn(t)}${saveBtn(t)}<a class="btn s" target="_blank" rel="noopener" href="${esc(t.trailer_url || trailer(t))}">${IC.play} Trailer</a></div></div>
+    <div class="bd">${metaHtml(t)}${rate}<p>${esc(t.description)}</p>
+    <dl class="kv">${kv('Genres', chips(t.genres, 'genre'))}${kv('Cast', chips(t.cast_members, 'actor'))}${kv('Director', chips(t.directors, 'actor'))}${kv('Countries', chips(t.countries, 'country'))}${kv('Added', t.date_added ? esc(String(t.date_added).slice(0, 10)) : '')}</dl>
+    ${awards}${episodes}
+    ${sim.length ? '<h3>More like this</h3><div class="row" id="sim"></div>' : ''}</div>`;
+  if (hdImg) $('.hd', box).style.background = `linear-gradient(0deg,var(--panel) 4%,#151d2e66),${cssUrl(hdImg)} center/cover`;
+  else $('.hd', box).style.background = `linear-gradient(0deg,var(--panel) 4%,#151d2e00),var(--g)`;
+  const s = $('#sim', box); if (s) sim.forEach((x) => s.append(card(x)));
+  $('#modal').scrollTop = 0;
+}
+function closeModal() { $('#modal').classList.remove('open'); document.body.style.overflow = ''; }
+
+async function rateTitle(id, v) {
+  try {
+    const r = await fetch(`/api/titles/${id}/rate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stars: v }) });
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    $$('#myr i').forEach((el, i) => el.classList.toggle('f', i < v));
+    toast(`You rated this ${v} star${v > 1 ? 's' : ''}`);
+    const m = $('#box .meta'); if (m && d.avg_rating != null) { const sp = m.lastElementChild; if (sp) sp.innerHTML = `${stars(d.avg_rating, d.rating_count)} ${d.avg_rating}`; }
+  } catch { toast('Couldn’t save your rating'); }
+}
+
+/* ---------- popups: account menu + notifications ---------- */
+function closePops() { $('#menu').classList.remove('open'); $('#notif').classList.remove('open'); $('#me').setAttribute('aria-expanded', 'false'); }
+const toggleMenu = () => { const o = !$('#menu').classList.contains('open'); closePops(); $('#menu').classList.toggle('open', o); $('#me').setAttribute('aria-expanded', o); };
+let notes = [];
+const seenKey = () => lk('seen');
+const lastSeen = () => { try { return localStorage.getItem(seenKey()) || ''; } catch { return ''; } };
+async function loadNotes() {
+  try { notes = await api('/api/notifications'); } catch { notes = []; }
+  $('#bell').classList.toggle('new', notes.some((n) => n.created_at > lastSeen()));
+}
+async function toggleNotes() {
+  const o = !$('#notif').classList.contains('open'); closePops();
+  if (!o) return;
+  await loadNotes();
+  const seen = lastSeen();
+  $('#notif').innerHTML = `<h4>Notifications</h4>` + (notes.length
+    ? notes.map((n) => `<button class="nt ${n.created_at > seen ? 'u' : ''}" ${n.show_id ? `data-open="${n.show_id}"` : ''}>${esc(n.message)}<small>${esc(String(n.created_at).slice(0, 16))}</small></button>`).join('')
+    : '<div class="none">No notifications yet.</div>');
+  $('#notif').classList.add('open');
+  if (notes.length) { try { localStorage.setItem(seenKey(), notes[0].created_at); } catch {} $('#bell').classList.remove('new'); }
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', (e) => {
+  const sv = e.target.closest('[data-save]');
+  if (sv) { e.stopPropagation(); toggleList(sv.dataset.save, sv.dataset.title); return; }
+  const rt = e.target.closest('[data-rate]');
+  if (rt) { rateTitle(rt.dataset.id, Number(rt.dataset.rate)); return; }
+  const dot = e.target.closest('[data-dot]');
+  if (dot) { moveHero(Number(dot.dataset.dot)); return; }
+  if (e.target.closest('[data-close]') || e.target.id === 'modal') { closeModal(); return; }
+  if (e.target.closest('[data-soon]')) { toast('This page isn’t available in the demo'); return; }
+  const g = e.target.closest('.chip[data-genre]'), a = e.target.closest('.chip[data-actor]'), c = e.target.closest('.chip[data-country]');
+  if (g) { closeModal(); go('browse', { genre: g.dataset.genre }); return; }
+  if (a) { closeModal(); $('#q').value = a.dataset.actor; go('browse', { q: a.dataset.actor }); return; }
+  if (c) { closeModal(); go('browse', { country: c.dataset.country }); return; }
+  const op = e.target.closest('[data-open]');
+  if (op) { closePops(); openModal(op.dataset.open); return; }
+  if (!e.target.closest('.pop') && !e.target.closest('#me') && !e.target.closest('#bell')) closePops();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closeModal(); closePops(); }
+  if (e.key === 'Enter' && e.target.matches('.card[data-open]')) openModal(e.target.dataset.open);
+  if (e.key === '/' && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
+});
+window.addEventListener('scroll', () => $('#top').classList.toggle('solid', scrollY > 10), { passive: true });
+
+let timer;
+$('#q').oninput = (e) => {
+  clearTimeout(timer);
+  timer = setTimeout(() => { const q = e.target.value.trim(); q ? go('browse', { q }) : go('home'); }, 350);
+};
+$('#me').onclick = toggleMenu;
+$('#bell').onclick = toggleNotes;
+$('#f-acc').onclick = () => { window.scrollTo(0, 0); toggleMenu(); };
+
+/* ---------- boot ---------- */
+(async () => {
+  try {
+    me = await api('/api/me');
+    const cfg = await api('/api/config');
+    F = cfg.features || {}; posters = cfg.posters;
+    $('#av').textContent = me.name[0].toUpperCase(); $('#nm').textContent = me.name;
+    if (me.role === 'admin') $('#av').classList.add('admin');
+    $('#menu').innerHTML = `<div class="who"><b>${esc(me.name)}</b><span>${me.role === 'admin' ? 'Administrator' : 'Member'} · @${esc(me.username)}</span></div><button class="it" id="rnd" role="menuitem">Surprise me</button><button class="it" id="out" role="menuitem">Sign out</button>`;
+    $('#rnd').onclick = async () => { closePops(); try { const [f] = await api('/api/featured?n=1'); if (f) openModal(f.show_id); } catch {} };
+    $('#out').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/login'; };
+    if (posters) $('#foot').innerHTML += '<br>Posters: this product uses the TMDB API but is not endorsed or certified by TMDB.';
+    await loadList();
+    buildNav();
+    loadNotes();
+    const start = location.hash.slice(1);
+    await go(['movies', 'tv', 'new', 'list', 'admin'].includes(start) ? start : 'home');
+  } catch (e) { if (e.message !== 'auth') fail(); }
+})();
+</script>
+</body>
+</html>
