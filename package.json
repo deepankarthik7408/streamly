@@ -1,6 +1,6 @@
 {
   "name": "streamly",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Netflix-style browsing app for the Netflix titles dataset (Express + MySQL)",
   "main": "server.js",
   "scripts": {
