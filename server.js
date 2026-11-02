@@ -138,6 +138,7 @@ app.use((req, _res, next) => {
   next();
 });
 
+<<<<<<< HEAD
 // never hand the app page to someone who isn't signed in, wherever the file was placed
 app.use((req, res, next) => (/^\/(app|index)\.html$/i.test(req.path) && !req.user ? res.redirect('/login') : next()));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
@@ -159,6 +160,12 @@ app.get('/', (req, res) => {
   }
   res.sendFile(file);
 });
+=======
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+
+app.get('/', (req, res) =>
+  req.user ? res.sendFile(path.join(__dirname, 'private', 'app.html')) : res.redirect('/login'));
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
 app.get('/login', (req, res) =>
   req.user ? res.redirect('/') : res.sendFile(path.join(__dirname, 'public', 'login.html')));
 

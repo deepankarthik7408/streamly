@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+<<<<<<< HEAD
 :root{--ink:#0b101a;--text:#fff;--muted:#c6cedd;--blue:#2a74ff;--err:#ff8a98}
 *{box-sizing:border-box;margin:0}
 html,body{min-height:100%}
@@ -41,12 +42,42 @@ form{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;width:min(860px
 .note{margin-top:28px;color:#aab4c8;font-size:.82rem;max-width:46ch}
 :focus-visible{outline:2px solid #fff;outline-offset:2px}
 @media(max-width:640px){.go{width:100%;justify-content:center}}
+=======
+:root{--ink:#0b101a;--text:#eef2f9;--muted:#9aa7bf;--blue:#2a74ff;--err:#ff7a8a}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font-family:Sora,system-ui,sans-serif;color:var(--text);background:var(--ink);display:flex;overflow:hidden}
+.bg{position:fixed;inset:0;background:center/cover no-repeat;opacity:0;transition:opacity 2.4s ease}
+.bg.on{opacity:1}
+#b1{background-image:url(/bg1.jpg)}#b2{background-image:url(/bg2.jpg)}
+.shade{position:fixed;inset:0;background:linear-gradient(90deg,#0b101af7 0%,#0b101ae6 36%,#0b101a73 74%,#0b101a40 100%)}
+.panel{position:relative;width:min(500px,100%);min-height:100%;padding:44px clamp(24px,5vw,56px);display:flex;flex-direction:column;justify-content:space-between;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:#0b101a66;border-right:1px solid #ffffff14;overflow:auto}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.25rem;letter-spacing:.04em}
+.logo svg{width:26px;height:26px;fill:var(--blue)}
+h1{font-weight:700;font-size:clamp(1.9rem,4vw,2.5rem);line-height:1.12;letter-spacing:-.025em;margin-bottom:10px}
+.sub{color:var(--muted);line-height:1.55;margin-bottom:30px;max-width:34ch;font-size:.95rem}
+label{display:block;font-size:.86rem;font-weight:500;margin:0 0 7px}
+.field{margin-bottom:18px}
+.in{display:flex;align-items:center;background:#ffffff0f;border:1px solid #ffffff26;border-radius:10px;transition:border-color .15s,background .15s}
+.in:focus-within{border-color:var(--blue);background:#ffffff17}
+.in input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--text);font:inherit;font-size:.95rem;padding:13px 14px}
+.in button{background:none;border:0;color:var(--muted);font:inherit;font-size:.8rem;padding:0 14px;cursor:pointer;height:100%}
+.in button:hover{color:var(--text)}
+.err{min-height:1.3em;color:var(--err);font-size:.88rem;margin:-4px 0 12px}
+.go{width:100%;border:0;border-radius:10px;background:var(--blue);color:#fff;font:inherit;font-weight:600;padding:13px;cursor:pointer;transition:filter .15s,transform .1s}
+.go:hover{filter:brightness(1.12)}.go:active{transform:translateY(1px)}
+.go[disabled]{opacity:.6;cursor:wait}
+.note{color:var(--muted);font-size:.8rem;line-height:1.55}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:700px){.shade{background:#0b101ad9}.panel{backdrop-filter:none;-webkit-backdrop-filter:none;background:none;border:0}}
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
 @media(prefers-reduced-motion:reduce){.bg{transition:none}}
 </style>
 </head>
 <body>
 <div class="bg on" id="b1"></div><div class="bg" id="b2"></div><div class="shade"></div>
 
+<<<<<<< HEAD
 <header>
   <div class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l16 9-16 9z"/></svg>STREAMLY</div>
   <button class="top-btn" id="top" type="button">Sign In</button>
@@ -63,11 +94,36 @@ form{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;width:min(860px
     <button class="go" id="go" type="submit">Sign in <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
   </form>
   <div class="err" id="err" role="alert" aria-live="polite"></div>
+=======
+<main class="panel">
+  <div class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l16 9-16 9z"/></svg>STREAMLY</div>
+
+  <form id="f" novalidate>
+    <h1>Welcome back</h1>
+    <p class="sub">Sign in to browse the catalog and keep your list.</p>
+
+    <div class="field">
+      <label for="u">Username</label>
+      <div class="in"><input id="u" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus></div>
+    </div>
+    <div class="field">
+      <label for="p">Password</label>
+      <div class="in"><input id="p" name="password" type="password" autocomplete="current-password"><button type="button" id="eye" aria-label="Show password">Show</button></div>
+    </div>
+    <div class="err" id="err" role="alert" aria-live="polite"></div>
+    <button class="go" id="go" type="submit">Sign in</button>
+  </form>
+
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
   <p class="note">Accounts are created by your administrator. Ask them if you need access or a password reset.</p>
 </main>
 
 <script>
 const $ = (s) => document.querySelector(s);
+<<<<<<< HEAD
+=======
+// slowly alternate the two background collages
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
 let on = 1;
 setInterval(() => {
   if (document.hidden) return;
@@ -76,7 +132,10 @@ setInterval(() => {
   $('#b2').classList.toggle('on', on === 2);
 }, 7000);
 
+<<<<<<< HEAD
 $('#top').onclick = () => $('#u').focus();
+=======
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
 $('#eye').onclick = () => {
   const show = $('#p').type === 'password';
   $('#p').type = show ? 'text' : 'password';
@@ -88,7 +147,11 @@ $('#f').onsubmit = async (e) => {
   const username = $('#u').value.trim(), password = $('#p').value;
   $('#err').textContent = '';
   if (!username || !password) { $('#err').textContent = 'Enter your username and password.'; return; }
+<<<<<<< HEAD
   $('#go').disabled = true;
+=======
+  $('#go').disabled = true; $('#go').textContent = 'Signing in…';
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
   try {
     const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
     const d = await r.json().catch(() => ({}));
@@ -96,7 +159,11 @@ $('#f').onsubmit = async (e) => {
     $('#err').textContent = d.error || 'Could not sign in. Try again.';
     $('#p').select();
   } catch { $('#err').textContent = 'Could not reach the server. Check your connection.'; }
+<<<<<<< HEAD
   $('#go').disabled = false;
+=======
+  $('#go').disabled = false; $('#go').textContent = 'Sign in';
+>>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
 };
 </script>
 </body>
