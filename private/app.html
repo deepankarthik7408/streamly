@@ -189,6 +189,7 @@ th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}th{col
 .role{border-radius:99px;padding:1px 10px;font-size:.74rem;border:1px solid var(--line)}.role.admin{border-color:var(--rose);color:#ff9bb1}
 .role.ok{border-color:#2f7a45;color:var(--green)}.role.no{color:var(--muted)}
 .pn.wide{grid-column:1/-1}
+.ghostnote{margin-top:10px;color:var(--muted);font-size:.78rem}.ghostnote code{background:var(--raise);border-radius:5px;padding:1px 6px;color:var(--blue2)}
 
 #toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 20px;font-size:.86rem;opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:90vw}
 #toast.show{opacity:1;transform:translate(-50%,0)}
@@ -319,14 +320,15 @@ function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('s
 const pcache = new Map();
 function posterFor(t) {
   const k = `${t.type}|${t.title}|${t.release_year}`;
-  if (!pcache.has(k)) pcache.set(k, api(`/api/poster?title=${encodeURIComponent(t.title)}&year=${t.release_year}&type=${encodeURIComponent(t.type)}`).then((r) => r.url).catch(() => null));
+  if (!pcache.has(k)) pcache.set(k, api(`/api/poster?title=${encodeURIComponent(t.title)}&year=${t.release_year}&type=${encodeURIComponent(t.type)}`).catch(() => ({})));
   return pcache.get(k);
 }
 const io = new IntersectionObserver((es) => es.forEach(async (e) => {
   if (!e.isIntersecting) return;
   io.unobserve(e.target);
   const d = e.target.dataset;
-  const url = await posterFor({ title: d.t, release_year: d.y, type: d.k });
+  const p = await posterFor({ title: d.t, release_year: d.y, type: d.k });
+  const url = d.w ? (p.backdrop || p.url) : p.url;
   if (url) { e.target.style.backgroundImage = cssUrl(url); e.target.classList.add('has'); }
 }), { rootMargin: '250px' });
 
@@ -338,7 +340,7 @@ function card(t, opts = {}) {
   el.setAttribute('role', 'button'); el.setAttribute('aria-label', t.title);
   const pct = opts.cont && t.duration_seconds ? Math.min(100, Math.round(t.progress_seconds / t.duration_seconds * 100)) : null;
   const label = opts.cont && t.episode_no ? `${t.title} · Ep ${t.episode_no}` : t.title;
-  el.innerHTML = `<div class="art" data-t="${esc(t.title)}" data-y="${t.release_year}" data-k="${esc(t.type)}" style="--g:${grad(t.title)}"><span class="ph">${esc(t.title)}</span>
+  el.innerHTML = `<div class="art" data-t="${esc(t.title)}" data-y="${t.release_year}" data-k="${esc(t.type)}" data-w="${wide ? 1 : ''}" style="--g:${grad(t.title)}"><span class="ph">${esc(t.title)}</span>
       <button class="save ${inList(t.show_id) ? 'on' : ''}" data-save="${t.show_id}" data-title="${esc(t.title)}" aria-label="Add ${esc(t.title)} to My List">${IC.bm}</button>
       ${pct !== null ? `<div class="prog"><i style="width:${pct}%"></i></div>` : ''}</div>
     <span class="ct">${esc(label)}</span><div class="cm"><span>${t.release_year}</span><span class="r">${esc(t.rating || 'NR')}</span>${stars(t.avg_rating, t.rating_count)}</div>`;
@@ -451,7 +453,7 @@ function buildHero() {
   heroData.forEach((f, i) => {
     const a = () => $('#sa' + i), set = (u) => { const el = a(); if (u && el) { el.style.backgroundImage = cssUrl(u); el.classList.add('has'); } };
     const img = f.backdrop_url || f.poster_url;
-    if (img) set(img); else if (posters) posterFor(f).then(set);
+    if (img) set(img); else if (posters) posterFor(f).then((p) => set(p.hero || p.backdrop || p.url));
   });
   let sx = null;
   h.addEventListener('pointerdown', (e) => { if (!e.target.closest('a,button')) sx = e.clientX; });
@@ -535,7 +537,7 @@ async function renderList() {
 }
 
 /* ---------- admin ---------- */
-const TABLE_NOTES = { users: 'Accounts (login is still hardcoded)', title_media: 'Posters, backdrops, trailers', title_stats: 'Star ratings, match %, trending', user_ratings: 'Member star ratings', awards: 'Award names', title_awards: 'Award-winning row & awards list', episodes: 'Episode lists for shows', watch_progress: 'Continue watching', my_list: 'My List saved in the database', title_views: 'Recently viewed', notifications: 'Bell notifications', collections: 'Curated home rows & hero', collection_titles: 'Titles inside collections', genre_art: 'Genre tile images' };
+const TABLE_NOTES = { users: 'Real accounts (sign-up, email and Google)', title_media: 'Posters, backdrops, trailers', title_stats: 'Star ratings, match %, trending', user_ratings: 'Member star ratings', awards: 'Award names', title_awards: 'Award-winning row & awards list', episodes: 'Episode lists for shows', watch_progress: 'Continue watching', my_list: 'My List saved in the database', title_views: 'Recently viewed', notifications: 'Bell notifications', collections: 'Curated home rows & hero', collection_titles: 'Titles inside collections', genre_art: 'Genre tile images' };
 async function renderAdmin() {
   const app = $('#app');
   app.innerHTML = '<div class="empty">Loading dashboard…</div>';
@@ -558,7 +560,12 @@ async function renderAdmin() {
       <div class="pn"><h3>Top genres</h3>${hbars(d.genres)}</div>
       <div class="pn"><h3>Top countries</h3>${hbars(d.countries)}</div>
       <div class="pn"><h3>Maturity ratings</h3>${hbars(d.ratings)}</div>
-      <div class="pn"><h3>Accounts</h3><table><tr><th>Name</th><th>Username</th><th>Role</th></tr>${d.accounts.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.username)}</td><td><span class="role ${a.role}">${a.role}</span></td></tr>`).join('')}</table></div>
+      <div class="pn wide"><h3>Members${d.members ? ` (${d.members.total.toLocaleString()})` : ''}</h3>${d.members
+        ? (d.members.recent.length
+          ? `<table><tr><th>Name</th><th>Email</th><th>Sign-in</th><th>Role</th><th>Joined</th><th>Last seen</th></tr>${d.members.recent.map((m) => `<tr><td>${esc(m.display_name)}</td><td>${esc(m.email || '–')}</td><td>${Number(m.google) ? 'Google' : 'Email'}</td><td><span class="role ${m.role}">${m.role}</span></td><td>${esc(String(m.created_at || '').slice(0, 10))}</td><td>${esc(String(m.last_login_at || '–').slice(0, 10))}</td></tr>`).join('')}</table><p class="ghostnote">Showing the 10 newest. Manage everyone in the <code>users</code> table.</p>`
+          : '<div class="ghost"><b>No members yet</b>People who create an account or sign in with Google will appear here.</div>')
+        : '<div class="ghost"><b>Accounts table not created</b>Run <code>database/accounts.sql</code> to turn on real sign-ups.</div>'}</div>
+      ${d.accounts.length ? `<div class="pn"><h3>Demo accounts</h3><table><tr><th>Name</th><th>Username</th><th>Role</th></tr>${d.accounts.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.username)}</td><td><span class="role ${a.role}">${a.role}</span></td></tr>`).join('')}</table></div>` : ''}
     </div>
   </section>`;
 }
@@ -667,6 +674,7 @@ $('#f-acc').onclick = () => { window.scrollTo(0, 0); toggleMenu(); };
     F = cfg.features || {}; posters = cfg.posters;
     $('#av').textContent = me.name[0].toUpperCase(); $('#nm').textContent = me.name;
     if (me.role === 'admin') $('#av').classList.add('admin');
+    if (me.picture) { $('#av').textContent = ''; $('#av').style.background = `${cssUrl(me.picture)} center/cover`; }
     $('#menu').innerHTML = `<div class="who"><b>${esc(me.name)}</b><span>${me.role === 'admin' ? 'Administrator' : 'Member'} · @${esc(me.username)}</span></div><button class="it" id="rnd" role="menuitem">Surprise me</button><button class="it" id="out" role="menuitem">Sign out</button>`;
     $('#rnd').onclick = async () => { closePops(); try { const [f] = await api('/api/featured?n=1'); if (f) openModal(f.show_id); } catch {} };
     $('#out').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/login'; };

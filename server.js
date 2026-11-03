@@ -81,6 +81,11 @@ const USERS = {
   rahul:  { password: 'Rahul@123',  name: 'Rahul',         role: 'member' },
 };
 
+// Demo accounts above can be switched off once real accounts exist: DISABLE_DEMO_ACCOUNTS=true
+const DEMO_OFF = String(process.env.DISABLE_DEMO_ACCOUNTS || '').toLowerCase() === 'true';
+// Anyone signing up / signing in with one of these emails becomes an admin: ADMIN_EMAILS=you@gmail.com,other@x.com
+const ADMIN_EMAILS = new Set((process.env.ADMIN_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean));
+
 // Set AUTH_SECRET in your environment so logins survive a restart.
 const SECRET = process.env.AUTH_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -88,10 +93,11 @@ const sign = (v) => crypto.createHmac('sha256', SECRET).update(v).digest('base64
 const sha = (v) => crypto.createHash('sha256').update(String(v)).digest();
 const safeEqual = (a, b) => crypto.timingSafeEqual(sha(a), sha(b));
 
-function makeToken(username) {
-  const p = Buffer.from(JSON.stringify({ u: username, exp: Date.now() + SESSION_MS })).toString('base64url');
+function makeToken(extra) {
+  const p = Buffer.from(JSON.stringify({ ...extra, exp: Date.now() + SESSION_MS })).toString('base64url');
   return `${p}.${sign(p)}`;
 }
+// returns the signed payload, or null if missing / forged / expired
 function readToken(token) {
   if (!token) return null;
   const [p, s] = token.split('.');
@@ -100,8 +106,14 @@ function readToken(token) {
   if (s.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(s), Buffer.from(expected))) return null;
   try {
     const d = JSON.parse(Buffer.from(p, 'base64url').toString());
-    return d.exp > Date.now() && USERS[d.u] ? d.u : null;
+    if (!(d.exp > Date.now())) return null;
+    return d.g || (!DEMO_OFF && USERS[d.u]) ? d : null;
   } catch { return null; }
+}
+function userFromToken(d) {
+  if (!d) return null;
+  if (d.g) return { username: d.u, name: d.n || 'Member', role: d.r === 'admin' ? 'admin' : 'member', email: d.e || null, picture: d.p || null };
+  return { username: d.u, name: USERS[d.u].name, role: USERS[d.u].role };
 }
 function parseCookies(req) {
   const out = {};
@@ -133,12 +145,10 @@ app.use(express.json({ limit: '4kb' }));
 app.get('/healthz', (_, res) => res.send('ok'));
 
 app.use((req, _res, next) => {
-  const username = readToken(parseCookies(req).sid);
-  req.user = username ? { username, name: USERS[username].name, role: USERS[username].role } : null;
+  req.user = userFromToken(readToken(parseCookies(req).sid));
   next();
 });
 
-<<<<<<< HEAD
 // never hand the app page to someone who isn't signed in, wherever the file was placed
 app.use((req, res, next) => (/^\/(app|index)\.html$/i.test(req.path) && !req.user ? res.redirect('/login') : next()));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
@@ -160,26 +170,171 @@ app.get('/', (req, res) => {
   }
   res.sendFile(file);
 });
-=======
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
-
-app.get('/', (req, res) =>
-  req.user ? res.sendFile(path.join(__dirname, 'private', 'app.html')) : res.redirect('/login'));
->>>>>>> 9c1d0b19fe6c3f7cee25aac97da5cec2d84beb99
 app.get('/login', (req, res) =>
   req.user ? res.redirect('/') : res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
-app.post('/api/login', (req, res) => {
-  if (throttled(req.ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
-  const username = String((req.body && req.body.username) || '').trim().toLowerCase();
-  const password = String((req.body && req.body.password) || '');
-  const user = Object.prototype.hasOwnProperty.call(USERS, username) ? USERS[username] : null;
-  const ok = safeEqual(password, user ? user.password : crypto.randomBytes(8).toString('hex'));
-  if (!user || !ok) return res.status(401).json({ error: 'Incorrect username or password.' });
-  attempts.delete(req.ip);
-  res.setHeader('Set-Cookie', `sid=${encodeURIComponent(makeToken(username))}; Max-Age=${SESSION_MS / 1000}; ${cookieFlags(req)}`);
-  res.json({ ok: true, role: user.role });
+/* ------------------------------------------------------------------ *
+ *  Accounts: sign up, sign in (email + password) and Google.
+ *  Real accounts live in the `users` table (see database/accounts.sql).
+ *  Passwords are stored only as salted scrypt hashes.
+ * ------------------------------------------------------------------ */
+const scryptAsync = (pw, salt) => new Promise((resolve, reject) =>
+  crypto.scrypt(pw, salt, 64, { N: 16384, r: 8, p: 1 }, (e, k) => (e ? reject(e) : resolve(k))));
+async function hashPassword(pw) {
+  const salt = crypto.randomBytes(16);
+  return `scrypt$${salt.toString('base64')}$${(await scryptAsync(pw, salt)).toString('base64')}`;
+}
+async function verifyPassword(pw, stored) {
+  const [alg, s, h] = String(stored || '').split('$');
+  if (alg !== 'scrypt' || !s || !h) return false;
+  const want = Buffer.from(h, 'base64'), got = await scryptAsync(pw, Buffer.from(s, 'base64'));
+  return want.length === got.length && crypto.timingSafeEqual(want, got);
+}
+let DUMMY_HASH = null;   // used so unknown emails take as long to reject as wrong passwords
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function startSession(req, res, u) {
+  const token = makeToken({ u: u.username, g: 1, n: u.display_name, e: u.email || '', p: u.avatar_url || '', r: u.role });
+  res.setHeader('Set-Cookie', `sid=${encodeURIComponent(token)}; Max-Age=${SESSION_MS / 1000}; ${cookieFlags(req)}`);
+}
+// promote to admin when the email is listed in ADMIN_EMAILS
+async function resolveRole(u) {
+  const want = ADMIN_EMAILS.has(String(u.email || '').toLowerCase()) ? 'admin' : (u.role === 'admin' ? 'admin' : 'member');
+  if (u.id && want !== u.role) await soft(() => pool.query('UPDATE users SET role = ? WHERE id = ?', [want, u.id]), null);
+  return want;
+}
+const tooMany = (res) => res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+
+app.get('/api/auth-config', (_, res) => res.json({ googleClientId: GOOGLE_CLIENT_ID_PUBLIC(), signup: !!has.users, demo: !DEMO_OFF }));
+
+// Create an account with email + password
+app.post('/api/signup', async (req, res) => {
+  if (!has.users) return res.status(501).json({ error: 'Account creation isn’t set up yet (the users table is missing).' });
+  if (throttled(req.ip)) return tooMany(res);
+  const b = req.body || {};
+  const name = String(b.name || '').trim().slice(0, 60);
+  const email = String(b.email || '').trim().toLowerCase();
+  const password = String(b.password || '');
+  if (!name) return res.status(400).json({ error: 'Enter your name.' });
+  if (!EMAIL_RE.test(email) || email.length > 255) return res.status(400).json({ error: 'Enter a valid email address.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Your password must be at least 8 characters.' });
+  if (password.length > 128) return res.status(400).json({ error: 'That password is too long (128 characters max).' });
+  try {
+    const [ex] = await pool.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
+    if (ex.length) return res.status(409).json({ error: 'An account with this email already exists. Try signing in.' });
+    const u = { username: 'u_' + crypto.randomBytes(8).toString('hex'), display_name: name, email, avatar_url: '', role: ADMIN_EMAILS.has(email) ? 'admin' : 'member' };
+    await pool.query(
+      'INSERT INTO users (username, display_name, email, password_hash, role, last_login_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [u.username, u.display_name, u.email, await hashPassword(password), u.role]);
+    attempts.delete(req.ip);
+    startSession(req, res, u);
+    res.json({ ok: true, role: u.role });
+  } catch (e) {
+    console.error('Sign-up failed:', e.code || '', e.message);
+    if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'An account with this email already exists. Try signing in.' });
+    if (e.code === 'ER_BAD_FIELD_ERROR') return res.status(500).json({ error: 'The users table needs updating. Run database/accounts.sql.' });
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
 });
+
+// Sign in with email (or username) + password
+app.post('/api/login', async (req, res) => {
+  if (throttled(req.ip)) return tooMany(res);
+  const b = req.body || {};
+  const id = String(b.email || b.username || '').trim().toLowerCase();
+  const password = String(b.password || '');
+  if (!id || !password) return res.status(400).json({ error: 'Enter your email and password.' });
+  const bad = () => res.status(401).json({ error: 'Incorrect email or password.' });
+  try {
+    // demo accounts from the USERS block at the top of this file
+    if (!DEMO_OFF && Object.prototype.hasOwnProperty.call(USERS, id)) {
+      if (!safeEqual(password, USERS[id].password)) return bad();
+      attempts.delete(req.ip);
+      res.setHeader('Set-Cookie', `sid=${encodeURIComponent(makeToken({ u: id }))}; Max-Age=${SESSION_MS / 1000}; ${cookieFlags(req)}`);
+      return res.json({ ok: true, role: USERS[id].role });
+    }
+    const [rows] = has.users ? await pool.query('SELECT * FROM users WHERE email = ? OR username = ? LIMIT 1', [id, id]) : [[]];
+    const u = rows[0];
+    if (!u) {
+      DUMMY_HASH = DUMMY_HASH || await hashPassword('not-a-real-password');
+      await verifyPassword(password, DUMMY_HASH);
+      return bad();
+    }
+    if (!u.is_active) return res.status(403).json({ error: 'This account has been disabled.' });
+    if (!u.password_hash) return res.status(401).json({ error: 'This account uses Google. Choose “Continue with Google”.' });
+    if (!(await verifyPassword(password, u.password_hash))) return bad();
+    u.role = await resolveRole(u);
+    await soft(() => pool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [u.id]), null);
+    attempts.delete(req.ip);
+    startSession(req, res, u);
+    res.json({ ok: true, role: u.role });
+  } catch (e) {
+    console.error('Sign-in failed:', e.code || '', e.message);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ---- Sign in with Google (needs GOOGLE_CLIENT_ID) ---- */
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+let jwks = { keys: [], at: 0 };
+async function googleKeys() {
+  if (jwks.keys.length && Date.now() - jwks.at < 3600e3) return jwks.keys;
+  const r = await fetch('https://www.googleapis.com/oauth2/v3/certs');
+  if (!r.ok) throw new Error(`could not fetch Google keys (${r.status})`);
+  jwks = { keys: (await r.json()).keys || [], at: Date.now() };
+  return jwks.keys;
+}
+async function verifyGoogleToken(idToken) {
+  const parts = String(idToken || '').split('.');
+  if (parts.length !== 3) throw new Error('malformed token');
+  const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
+  const p = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+  if (header.alg !== 'RS256') throw new Error('unexpected algorithm');
+  const jwk = (await googleKeys()).find((k) => k.kid === header.kid);
+  if (!jwk) throw new Error('unknown signing key');
+  const key = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+  if (!crypto.verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], 'base64url'))) throw new Error('bad signature');
+  if (!['https://accounts.google.com', 'accounts.google.com'].includes(p.iss)) throw new Error('wrong issuer');
+  if (p.aud !== GOOGLE_CLIENT_ID) throw new Error('token was issued for a different app');
+  if (!(p.exp * 1000 > Date.now())) throw new Error('token expired');
+  if (!p.sub || p.email_verified === false) throw new Error('account not verified');
+  return p;
+}
+const GOOGLE_CLIENT_ID_PUBLIC = () => GOOGLE_CLIENT_ID || null;
+app.post('/api/login/google', async (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(501).json({ error: 'Google sign-in is not set up yet.' });
+  if (throttled(req.ip)) return tooMany(res);
+  try {
+    const p = await verifyGoogleToken(req.body && req.body.credential);
+    const email = String(p.email || '').toLowerCase();
+    const name = String(p.name || email.split('@')[0] || 'Member').slice(0, 60);
+    let u = { username: `g_${p.sub}`, display_name: name, email, avatar_url: p.picture || '', role: 'member' };
+    if (has.users) {
+      const [rows] = await pool.query('SELECT * FROM users WHERE google_sub = ? OR (email = ? AND ? <> \'\') LIMIT 1', [p.sub, email, email]);
+      if (rows[0]) {
+        u = rows[0];
+        if (!u.is_active) return res.status(403).json({ error: 'This account has been disabled.' });
+        // link Google to an existing email account the first time, and refresh the photo
+        await pool.query('UPDATE users SET google_sub = COALESCE(google_sub, ?), avatar_url = ?, last_login_at = NOW() WHERE id = ?', [p.sub, p.picture || u.avatar_url, u.id]);
+        u.avatar_url = p.picture || u.avatar_url;
+      } else {
+        u.role = ADMIN_EMAILS.has(email) ? 'admin' : 'member';
+        await pool.query(
+          `INSERT INTO users (username, display_name, email, password_hash, google_sub, avatar_url, role, last_login_at)
+           VALUES (?, ?, ?, '', ?, ?, ?, NOW())`,
+          [u.username, u.display_name, email || null, p.sub, p.picture || null, u.role]);
+      }
+    }
+    u.role = await resolveRole(u);
+    attempts.delete(req.ip);
+    startSession(req, res, u);
+    res.json({ ok: true, role: u.role });
+  } catch (e) {
+    console.error('Google sign-in failed:', e.code || '', e.message);
+    res.status(401).json({ error: 'Google sign-in failed. Please try again.' });
+  }
+});
+
 app.post('/api/logout', (req, res) => {
   res.setHeader('Set-Cookie', `sid=; Max-Age=0; ${cookieFlags(req)}`);
   res.json({ ok: true });
@@ -446,6 +601,13 @@ app.get('/api/admin/stats', adminOnly, wrap(async (_, res) => {
     `SELECT c.name, COUNT(*) AS n FROM countries c JOIN title_countries tc ON tc.country_id = c.id GROUP BY c.id, c.name ORDER BY n DESC LIMIT 8`);
   const [ratings] = await pool.query(
     `SELECT rating AS name, COUNT(*) AS n FROM titles WHERE rating IS NOT NULL AND rating <> '' GROUP BY rating ORDER BY n DESC LIMIT 8`);
+  const members = has.users ? await soft(async () => {
+    const [[c]] = await pool.query('SELECT COUNT(*) AS n FROM users');
+    const [recent] = await pool.query(
+      `SELECT display_name, email, role, (google_sub IS NOT NULL) AS google, created_at, last_login_at
+         FROM users ORDER BY created_at DESC LIMIT 10`);
+    return { total: Number(c.n), recent };
+  }, { total: 0, recent: [] }) : null;
   // which optional tables exist and how many rows they hold
   const tables = [];
   for (const name of OPTIONAL) {
@@ -455,8 +617,8 @@ app.get('/api/admin/stats', adminOnly, wrap(async (_, res) => {
   }
   res.json({
     total: Number(tot.total), movies: Number(tot.movies), shows: Number(tot.shows),
-    byYear, genres, countries, ratings, tables,
-    accounts: Object.entries(USERS).map(([username, v]) => ({ username, name: v.name, role: v.role })),
+    byYear, genres, countries, ratings, tables, members,
+    accounts: DEMO_OFF ? [] : Object.entries(USERS).map(([username, v]) => ({ username, name: v.name, role: v.role })),
   });
 }));
 
@@ -466,24 +628,34 @@ app.get('/api/admin/stats', adminOnly, wrap(async (_, res) => {
  * ------------------------------------------------------------------ */
 const posterCache = new Map();
 app.get('/api/poster', wrap(async (req, res) => {
-  const key = process.env.TMDB_API_KEY;
-  if (!key) return res.json({ url: null });
+  const key = (process.env.TMDB_API_KEY || '').trim();
+  if (!key) return res.json({ url: null, backdrop: null, hero: null });
   const { title = '', year = '', type = 'Movie' } = req.query;
   const ck = `${type}|${title}|${year}`;
   if (!posterCache.has(ck)) {
     const kind = type === 'TV Show' ? 'tv' : 'movie';
     const yp = kind === 'tv' ? 'first_air_date_year' : 'year';
-    let url = null;
+    const isToken = key.startsWith('eyJ');              // v4 "Read Access Token" or v3 "API Key" both work
+    const headers = { accept: 'application/json', ...(isToken ? { Authorization: `Bearer ${key}` } : {}) };
+    const url = `https://api.themoviedb.org/3/search/${kind}?query=${encodeURIComponent(title)}&${yp}=${encodeURIComponent(year)}` +
+      (isToken ? '' : `&api_key=${encodeURIComponent(key)}`);
     try {
-      const r = await fetch(`https://api.themoviedb.org/3/search/${kind}?api_key=${key}&query=${encodeURIComponent(title)}&${yp}=${encodeURIComponent(year)}`);
+      const r = await fetch(url, { headers });
+      if (!r.ok) throw new Error(`TMDB answered ${r.status} (check TMDB_API_KEY)`);
       const d = await r.json();
-      const hit = (d.results || []).find((x) => x.poster_path);
-      if (hit) url = `https://image.tmdb.org/t/p/w342${hit.poster_path}`;
-    } catch (e) { /* leave null */ }
-    posterCache.set(ck, url);
+      const list = d.results || [];
+      const hit = list.find((x) => x.poster_path) || list[0];
+      const img = (p, size) => (p ? `https://image.tmdb.org/t/p/${size}${p}` : null);
+      posterCache.set(ck, hit
+        ? { url: img(hit.poster_path, 'w342'), backdrop: img(hit.backdrop_path, 'w780'), hero: img(hit.backdrop_path, 'w1280') }
+        : { url: null, backdrop: null, hero: null });
+    } catch (e) {
+      console.error('TMDB lookup failed:', e.message);   // not cached, so it retries next time
+      return res.json({ url: null, backdrop: null, hero: null });
+    }
   }
   res.set('Cache-Control', 'private, max-age=86400');
-  res.json({ url: posterCache.get(ck) });
+  res.json(posterCache.get(ck));
 }));
 
 const port = process.env.PORT || 3000;
